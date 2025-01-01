@@ -21,6 +21,7 @@ import functools
 import threading
 import typing as tp
 from weakref import WeakKeyDictionary
+from flax import config
 
 import jax
 import numpy as np
@@ -65,50 +66,12 @@ def is_state_leaf(x: tp.Any) -> tpe.TypeGuard[StateLeaf]:
 def is_node_leaf(x: tp.Any) -> tpe.TypeGuard[NodeLeaf]:
   return isinstance(x, Variable)
 
-
-# class RefMap(reprlib.MappingReprMixin, tp.Generic[A, B]):
-#   """A mapping that uses object id as the hash for the keys."""
-
-#   def __init__(self, mapping: dict[A, B] | tp.Iterable[tuple[A, B]] = (), /):
-#     items = tp.cast(
-#       tp.Iterable[tuple[A, B]],
-#       mapping.items() if isinstance(mapping, dict) else mapping,
-#     )
-#     self._mapping = {id(key): (key, value) for key, value in items}
-
-#   def copy(self) -> RefMap[A, B]:
-#     return RefMap(self.items())
-
-#   def update(self, mapping: tp.Mapping[A, B]):
-#     self._mapping.update(
-#       (id(key), (key, value)) for key, value in mapping.items()
-#     )
-
-#   def items(self) -> tp.Iterator[tuple[A, B]]:
-#     return iter((key, value) for idx, (key, value) in self._mapping.items())
-
-#   def __getitem__(self, key: A) -> B:
-#     return self._mapping[id(key)][1]
-
-#   def __contains__(self, key: object) -> bool:
-#     return id(key) in self._mapping
-
-#   def __setitem__(self, key: A, value: B):
-#     self._mapping[id(key)] = (key, value)
-
-#   def __delitem__(self, key: A):
-#     del self._mapping[id(key)]
-
-#   def __iter__(self) -> tp.Iterator[A]:
-#     return (key for key, _ in self._mapping.values())
-
-#   def __len__(self) -> int:
-#     return len(self._mapping)
-
-#   def __str__(self) -> str:
-#     return repr(self)
-
 RefMap = dict
+
+if not tp.TYPE_CHECKING and config.flax_use_flaxlib:
+  import flaxlib
+
+  RefMap = flaxlib.RefMap
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class NodeImplBase(tp.Generic[Node, Leaf, AuxData]):
@@ -423,8 +386,8 @@ def flatten(
   node: Node,
   /,
   *,
-  ref_index: RefMap[tp.Any, Index] | None = None,
-  ref_outer_index: RefMap[tp.Any, Index] | None = None,
+  ref_index: RefMap | None = None,
+  ref_outer_index: RefMap | None = None,
 ) -> tuple[GraphDef[Node], FlatState[VariableState[tp.Any]]]: ...
 @tp.overload
 def flatten(
@@ -433,8 +396,8 @@ def flatten(
   *,
   with_paths: tp.Literal[True],
   return_variables: tp.Literal[True],
-  ref_index: RefMap[tp.Any, Index] | None = None,
-  ref_outer_index: RefMap[tp.Any, Index] | None = None,
+  ref_index: RefMap | None = None,
+  ref_outer_index: RefMap | None = None,
 ) -> tuple[
   GraphDef[Node],
   FlatState[Variable[tp.Any]],
@@ -445,8 +408,8 @@ def flatten(
   /,
   *,
   with_paths: bool,
-  ref_index: RefMap[tp.Any, Index] | None = None,
-  ref_outer_index: RefMap[tp.Any, Index] | None = None,
+  ref_index: RefMap | None = None,
+  ref_outer_index: RefMap | None = None,
 ) -> tuple[
   GraphDef[Node],
   FlatState[VariableState[tp.Any]] | list[tp.Any],
@@ -457,8 +420,8 @@ def flatten(
   *,
   with_paths: bool = True,
   return_variables: bool = False,
-  ref_index: RefMap[tp.Any, Index] | None = None,
-  ref_outer_index: RefMap[tp.Any, Index] | None = None,
+  ref_index: RefMap | None = None,
+  ref_outer_index: RefMap | None = None,
 ) -> tuple[
   GraphDef[Node],
   FlatState[VariableState[tp.Any]] | FlatState[Variable[tp.Any]] | list[tp.Any],
@@ -503,8 +466,8 @@ def _graph_flatten(
   node: Node,
   node_impl: NodeImpl[Node, Leaf, AuxData],
   path: list[Key] | None,
-  ref_index: RefMap[tp.Any, Index],
-  ref_outer_index: RefMap[tp.Any, Index] | None,
+  ref_index: RefMap,
+  ref_outer_index: RefMap | None,
   leaves: list[StateLeaf | Variable[tp.Any]],
   paths: list[PathParts] | None,
   return_variables: bool,
@@ -598,8 +561,8 @@ def fingerprint(
   node,
   /,
   *,
-  ref_index: RefMap[tp.Any, Index] | None = None,
-  new_ref_index: RefMap[tp.Any, Index] | None = None,
+  ref_index: RefMap | None = None,
+  new_ref_index: RefMap | None = None,
 ) -> tuple[tp.Any, ...]:
   """ """
   if ref_index is None:
@@ -620,8 +583,8 @@ def fingerprint(
 def _graph_fingerprint(
   node,
   node_impl: NodeImpl[Node, Leaf, AuxData],
-  ref_index: RefMap[tp.Any, Index],
-  new_ref_index: RefMap[tp.Any, Index],
+  ref_index: RefMap,
+  new_ref_index: RefMap,
   next_index: int,
 ) -> tuple[tuple[tp.Any, ...], int]:
   is_pytree_node_ = type(node_impl) is PytreeNodeImpl
@@ -983,7 +946,7 @@ class CacheContext(tp.NamedTuple):
   final_graphdef: GraphDef[tp.Any]
   paths: tuple[PathParts, ...]
   variables: list[Variable[tp.Any]]
-  new_ref_index: RefMap[tp.Any, Index]
+  new_ref_index: RefMap
   new_index_ref: dict[Index, tp.Any]
 
   @staticmethod
@@ -992,7 +955,7 @@ class CacheContext(tp.NamedTuple):
     graphdef: GraphDef[tp.Any],
     paths: tuple[PathParts, ...],
     variables: list[Variable[tp.Any]],
-    new_ref_index: RefMap[tp.Any, Index],
+    new_ref_index: RefMap,
   ) -> CacheContext:
     new_index_ref = {index: obj for obj, index in new_ref_index.items()}
     if type(graphdef) is NodeDef:
@@ -1028,7 +991,7 @@ GRAPH_CONTEXT = GraphContext()
 @dataclasses.dataclass
 class SplitContext:
   ctxtag: str | None
-  ref_index: RefMap[tp.Any, Index]
+  ref_index: RefMap
 
   @tp.overload
   def split(self, graph_node: A, /) -> tuple[GraphDef[A], GraphState]: ...
@@ -1361,11 +1324,11 @@ class UpdateContext:
   """A context manager for handling complex state updates."""
 
   tag: str
-  outer_ref_outer_index: RefMap[tp.Any, Index] | None
+  outer_ref_outer_index: RefMap | None
   outer_index_inner_ref: dict[Index, tp.Any] | None
   # reverse caches
   outer_index_outer_ref: dict[Index, tp.Any] | None
-  inner_ref_outer_index: RefMap[tp.Any, Index] | None
+  inner_ref_outer_index: RefMap | None
 
   # define hash and eq to make this an opaque object
   def __hash__(self):
@@ -1374,7 +1337,7 @@ class UpdateContext:
   def __eq__(self, other):
     return isinstance(other, UpdateContext)
 
-  def flatten_end(self, ref_index: RefMap[tp.Any, Index]):
+  def flatten_end(self, ref_index: RefMap):
     if self.outer_ref_outer_index is None:
       # outer split (1), store the references
       self.outer_ref_outer_index = ref_index
@@ -1391,7 +1354,7 @@ class UpdateContext:
       # inner merge (2)
       self.outer_index_inner_ref = index_ref
       self.inner_ref_outer_index = RefMap(
-        (obj, index) for index, obj in index_ref.items()
+        {obj: index for index, obj in index_ref.items()}
       )
 
   @tp.overload
@@ -1475,7 +1438,7 @@ class UpdateContext:
       :class:`GraphDef` and one or more :class:`State`'s equal to the number of filters passed. If no
       filters are passed, a single :class:`State` is returned.
     """
-    ref_index: RefMap[tp.Any, Index] = RefMap()
+    ref_index: RefMap = RefMap()
     graphdef, flat_state = flatten(
       node, ref_index=ref_index, ref_outer_index=self.inner_ref_outer_index
     )

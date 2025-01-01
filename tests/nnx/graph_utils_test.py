@@ -354,10 +354,10 @@ class TestGraphUtils(absltest.TestCase):
       idx_out_ref_in: dict[int, Any] = {}
       m = nnx.graph.unflatten(graphdef, state, index_ref=idx_out_ref_in)
       ref_in_idx_out = nnx.graph.RefMap(
-        (v, k) for k, v in idx_out_ref_in.items()
+        {v: k for k, v in idx_out_ref_in.items()}
       )
       f(m)
-      ref_in_idx_in = nnx.graph.RefMap[Any, int]()
+      ref_in_idx_in = nnx.graph.RefMap()
       graphdef, state = nnx.graph.flatten(
         m, ref_index=ref_in_idx_in, ref_outer_index=ref_in_idx_out
       )
@@ -386,7 +386,7 @@ class TestGraphUtils(absltest.TestCase):
     a = m.a
     b = m.b
 
-    ref_out_idx_out = nnx.graph.RefMap[Any, int]()
+    ref_out_idx_out = nnx.graph.RefMap()
     graphdef: nnx.graph.GraphDef[Foo]
     graphdef, state = nnx.graph.flatten(m, ref_index=ref_out_idx_out)
     idx_out_ref_out = {v: k for k, v in ref_out_idx_out.items()}
@@ -397,10 +397,10 @@ class TestGraphUtils(absltest.TestCase):
       idx_out_ref_in: dict[int, Any] = {}
       m = nnx.graph.unflatten(graphdef, state, index_ref=idx_out_ref_in)
       ref_in_idx_out = nnx.graph.RefMap(
-        (v, k) for k, v in idx_out_ref_in.items()
+        {v: k for k, v in idx_out_ref_in.items()}
       )
       f(m)
-      ref_in_idx_in = nnx.graph.RefMap[Any, int]()
+      ref_in_idx_in = nnx.graph.RefMap()
       graphdef, state = nnx.graph.flatten(
         m, ref_index=ref_in_idx_in, ref_outer_index=ref_in_idx_out
       )
@@ -436,10 +436,10 @@ class TestGraphUtils(absltest.TestCase):
       idx_out_ref_in: dict[int, Any] = {}
       m = nnx.graph.unflatten(graphdef, state, index_ref=idx_out_ref_in)
       ref_in_idx_out = nnx.graph.RefMap(
-        (v, k) for k, v in idx_out_ref_in.items()
+        {v: k for k, v in idx_out_ref_in.items()}
       )
       f(m)
-      ref_in_idx_in = nnx.graph.RefMap[Any, int]()
+      ref_in_idx_in = nnx.graph.RefMap()
       graphdef, state = nnx.graph.flatten(
         m, ref_index=ref_in_idx_in, ref_outer_index=ref_in_idx_out
       )
